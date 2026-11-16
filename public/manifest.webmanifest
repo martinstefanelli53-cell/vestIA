@@ -1,0 +1,11 @@
+{
+  "name": "VESTIA",
+  "short_name": "VESTIA",
+  "description": "Tu guardarropa digital y tu estilista con inteligencia artificial.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
+  "lang": "es",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
