@@ -1,7 +1,7 @@
 // Alta y edición de prendas: fotos (cámara o galería), reconocimiento
 // automático y ficha editable. La clasificación siempre puede corregirse.
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, Sparkles, Undo2, Wand2, X } from "lucide-react";
+import { Camera, ImagePlus, Lightbulb, Sparkles, Undo2, Wand2, X } from "lucide-react";
 import {
   CATEGORIES, CATEGORY_LABELS, COLOR_NAMES, FITS, MATERIALS, PATTERNS, SEASONS, STYLES, TYPES_BY_CATEGORY,
   type Category, type ClassificationResult, type Fit, type GarmentAttributes,
@@ -274,6 +274,20 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
             </div>
             <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
             <input ref={galleryInput} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} multiple hidden data-testid="gallery-input" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+            <details className="group mt-3 rounded-xl bg-mist px-3.5 py-3 text-[13px] leading-relaxed" open={!editing && photoCount === 0}>
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
+                <Lightbulb className="h-4 w-4 text-crimson" /> Cómo sacar una buena foto
+              </summary>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-graphite">
+                <li><strong className="font-medium text-ink">Una sola prenda por foto,</strong> entera y sin que se corte ningún borde.</li>
+                <li><strong className="font-medium text-ink">Fondo liso que contraste:</strong> prenda clara sobre fondo oscuro, y al revés. Evitá blanco sobre blanco.</li>
+                <li><strong className="font-medium text-ink">Apoyala plana</strong> sobre una cama, el piso o una mesa lisa, estirada y sin arrugas grandes. Si la colgás, que sea contra una pared lisa.</li>
+                <li><strong className="font-medium text-ink">Sacala de frente y desde arriba,</strong> sin inclinar el celular, con la prenda centrada.</li>
+                <li><strong className="font-medium text-ink">Luz natural y pareja,</strong> sin sombras fuertes ni flash. Cerca de una ventana funciona muy bien.</li>
+                <li><strong className="font-medium text-ink">Sin personas ni objetos</strong> alrededor (zapatos, bolsos, mascotas). El calzado, de a un par.</li>
+              </ul>
+              <p className="mt-2 text-xs text-graphite">Con estas fotos el reconocimiento y el "Fondo limpio" funcionan mucho mejor. Siempre podés corregir la ficha a mano.</p>
+            </details>
             {!editing && photoCount === 0 && (
               <p className="mt-2 text-xs leading-relaxed text-graphite">Sumá una foto y reconocemos la prenda por vos. También podés cargarla sin foto y agregarla después.</p>
             )}

@@ -75,7 +75,7 @@ export async function cleanGarmentPhoto(file: Blob, onProgress?: (percent: numbe
     }
     const share = on / (w * h);
     if (share < MIN_FOREGROUND || share > MAX_FOREGROUND) {
-      throw new CutoutError("No pudimos separar la prenda del fondo en esta foto.");
+      throw new CutoutError("No pudimos separar la prenda del fondo. Probá con un fondo liso que contraste con la prenda, o usá la foto original.");
     }
 
     // Aplica la máscara como transparencia (bordes suaves) y recorta.
