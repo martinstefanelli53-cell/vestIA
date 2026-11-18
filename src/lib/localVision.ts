@@ -6,6 +6,7 @@ import {
   ALL_TYPES, TYPES_BY_CATEGORY, type Category, type ClassificationResult,
 } from "@shared/taxonomy.ts";
 import { levelsFor } from "./garmentDefaults";
+import { loadTransformers, progressTracker } from "./transformers";
 
 const MODEL = "Xenova/clip-vit-base-patch32";
 
@@ -62,21 +63,8 @@ export type VisionProgress = (percent: number) => void;
 /** Carga el modelo (una sola vez por sesión). Los avances se informan en 0–100. */
 export function loadVisionModel(onProgress?: VisionProgress): Promise<ZeroShot> {
   classifierPromise ??= (async () => {
-    // Import dinámico: la librería solo se descarga cuando alguien sube una foto.
-    const { pipeline, env } = await import("@huggingface/transformers");
-    env.allowLocalModels = false;
-    // Runtime WebAssembly servido por el propio sitio (ver scripts/copy-ort.mjs).
-    env.backends.onnx.wasm!.wasmPaths = new URL(`${import.meta.env.BASE_URL}ort/`, location.origin).href;
-    const files = new Map<string, { loaded: number; total: number }>();
-    const classifier = await pipeline("zero-shot-image-classification", MODEL, {
-      progress_callback: (p: { status: string; file?: string; loaded?: number; total?: number }) => {
-        if (p.status !== "progress" || !p.file || !p.total) return;
-        files.set(p.file, { loaded: p.loaded ?? 0, total: p.total });
-        const all = [...files.values()];
-        const total = all.reduce((s, f) => s + f.total, 0);
-        onProgress?.(Math.min(99, Math.round((all.reduce((s, f) => s + f.loaded, 0) / total) * 100)));
-      },
-    });
+    const { pipeline } = await loadTransformers();
+    const classifier = await pipeline("zero-shot-image-classification", MODEL, { progress_callback: progressTracker(onProgress) });
     return classifier as unknown as ZeroShot;
   })().catch((error) => {
     classifierPromise = null; // permite reintentar si falló la descarga

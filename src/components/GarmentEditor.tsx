@@ -1,7 +1,7 @@
 // Alta y edición de prendas: fotos (cámara o galería), reconocimiento
 // automático y ficha editable. La clasificación siempre puede corregirse.
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, Sparkles, X } from "lucide-react";
+import { Camera, ImagePlus, Sparkles, Undo2, Wand2, X } from "lucide-react";
 import {
   CATEGORIES, CATEGORY_LABELS, COLOR_NAMES, FITS, MATERIALS, PATTERNS, SEASONS, STYLES, TYPES_BY_CATEGORY,
   type Category, type ClassificationResult, type Fit, type GarmentAttributes,
@@ -12,13 +12,15 @@ import { defaultAttributes, FORMALITY_LABELS, levelsFor, WARMTH_LABELS } from "@
 import { ACCEPTED_IMAGE_TYPES, prepareImage, validateImage } from "@/lib/image";
 import type { Garment, GarmentImage } from "@/lib/types";
 import { friendlyError, isLimitError, signedImageUrl, useBackendStatus, useSaveGarment, type NewImage } from "@/hooks/data";
+import { CutoutError, cleanGarmentPhoto } from "@/lib/cutout";
 import { analyzeGarmentLocally } from "@/lib/localVision";
 import { LimitSheet } from "./Plan";
 import { useToast } from "./Toast";
 import { Button, Chip, ChipGroup, ColorPicker, cx, Field, Segmented, Sheet, Spinner } from "./ui";
 
 type Attributes = GarmentAttributes & { notes: string | null };
-interface Draft extends NewImage { preview: string }
+// `original` guarda la foto sin retocar cuando se aplicó "Fondo limpio".
+interface Draft extends NewImage { preview: string; original?: Draft }
 type Analysis = { state: "idle" } | { state: "running"; progress?: number } | { state: "ai" } | { state: "local" } | { state: "colors" } | { state: "not-garment" };
 
 const MAX_PHOTOS = 5;
@@ -58,9 +60,10 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
   const [aiClassified, setAiClassified] = useState(false);
   const [levelsTouched, setLevelsTouched] = useState(false);
   const [limitOpen, setLimitOpen] = useState(false);
+  const [cleaning, setCleaning] = useState<{ key: string; progress?: number } | null>(null);
 
   const reset = (source?: Garment | null) => {
-    drafts.forEach((d) => URL.revokeObjectURL(d.preview));
+    drafts.forEach((d) => { URL.revokeObjectURL(d.preview); if (d.original) URL.revokeObjectURL(d.original.preview); });
     setAttrs(source ? toAttributes(source) : defaultAttributes());
     setDrafts([]);
     setRemoved([]);
@@ -156,8 +159,33 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
     if (isFirstPhoto) void analyze(added[0]);
   };
 
+  /** Quita el fondo y centra la prenda; la foto original se conserva. */
+  const cleanDraft = async (index: number) => {
+    const draft = drafts[index];
+    if (!draft || cleaning) return;
+    setCleaning({ key: draft.preview });
+    try {
+      const blob = await cleanGarmentPhoto(draft.file, (progress) => setCleaning({ key: draft.preview, progress }));
+      const file = new File([blob], "fondo-limpio.jpg", { type: "image/jpeg" });
+      const prepared = await prepareImage(file);
+      const cleaned: Draft = { file, thumb: prepared.thumb, preview: URL.createObjectURL(prepared.thumb), original: draft };
+      setDrafts((list) => list.map((d) => (d.preview === draft.preview ? cleaned : d)));
+    } catch (e) {
+      toast(e instanceof CutoutError ? e.message : "No pudimos limpiar el fondo de esta foto. Podés usar la original.", "error");
+    } finally {
+      setCleaning(null);
+    }
+  };
+
+  const restoreDraft = (index: number) => setDrafts((list) => list.map((d, i) => {
+    if (i !== index || !d.original) return d;
+    URL.revokeObjectURL(d.preview);
+    return d.original;
+  }));
+
   const removeDraft = (index: number) => setDrafts((list) => {
     URL.revokeObjectURL(list[index].preview);
+    if (list[index].original) URL.revokeObjectURL(list[index].original!.preview);
     return list.filter((_, i) => i !== index);
   });
 
@@ -168,7 +196,8 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
         id: garment?.id,
         attributes: { ...attrs, name, notes: attrs.notes?.trim() || null, secondary_colors: attrs.secondary_colors.filter((c) => c !== attrs.primary_color) },
         aiClassified,
-        newImages: drafts.map(({ file, thumb }) => ({ file, thumb })),
+        // Con fondo limpio se guarda esa versión como portada y la original como segunda foto.
+        newImages: drafts.flatMap((d) => (d.original ? [{ file: d.file, thumb: d.thumb }, { file: d.original.file, thumb: d.original.thumb }] : [{ file: d.file, thumb: d.thumb }])),
         removedImages: removed,
         existingImageCount: garment?.garment_images.length ?? 0,
       });
@@ -217,6 +246,19 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
                   <img src={draft.preview} alt={`Vista previa ${index + 1}`} className="h-full w-full object-cover" />
                   <button type="button" aria-label="Quitar foto" onClick={() => removeDraft(index)}
                     className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-ink/75 text-white transition-transform active:scale-90"><X className="h-4 w-4" /></button>
+                  {cleaning?.key === draft.preview ? (
+                    <div role="status" className="absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-full bg-ink/85 px-2 py-1.5 text-[11px] font-medium text-white">
+                      <Spinner className="h-3 w-3" /> {cleaning.progress !== undefined && cleaning.progress < 100 ? `Preparando ${cleaning.progress} %` : "Limpiando…"}
+                    </div>
+                  ) : draft.original ? (
+                    <button type="button" onClick={() => restoreDraft(index)} className="absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-full bg-white/95 px-2 py-1.5 text-[11px] font-medium shadow-sm transition-transform active:scale-95">
+                      <Undo2 className="h-3 w-3" /> Usar original
+                    </button>
+                  ) : (
+                    <button type="button" disabled={Boolean(cleaning)} onClick={() => void cleanDraft(index)} className="absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-full bg-white/95 px-2 py-1.5 text-[11px] font-medium shadow-sm transition-transform active:scale-95 disabled:opacity-50">
+                      <Wand2 className="h-3 w-3" /> Fondo limpio
+                    </button>
+                  )}
                 </div>
               ))}
               {photoCount < MAX_PHOTOS && (
