@@ -34,13 +34,15 @@ export function explainOutfit(candidate: OutfitCandidate, weather: StylingWeathe
   };
   sentences.push(colorLine[palette.kind]);
 
+  const openShoes = Boolean(shoes && ["sandalia", "taco"].includes(shoes.type));
   const feels = temp ?? weather?.feelsLikeC;
   const rain = intent.rain ?? weather?.rain ?? false;
   if (feels !== undefined) {
     const t = Math.round(feels);
-    if (outer && rain) sentences.push(`Sumé ${name(outer)} y calzado cerrado para la lluvia${outer.waterproof ? "" : ", aunque no es impermeable: llevá paraguas"}.`);
+    if (outer && rain) sentences.push(`Sumé ${name(outer)} para la lluvia${outer.waterproof ? "" : ", aunque no es impermeable: llevá paraguas"}${openShoes ? ". Ojo: el calzado es abierto y no es lo ideal con lluvia; si tenés uno cerrado, cargalo en tu guardarropa" : ""}.`);
     else if (outer && intent.warmthShift > 0) sentences.push(`Sumé ${name(outer)} porque pediste algo abrigado.`);
     else if (outer) sentences.push(`Sumé ${name(outer)} porque la sensación térmica ronda los ${t}°.`);
+    else if (rain && openShoes) sentences.push(`Se espera lluvia y ${name(shoes!)} es calzado abierto: no es lo ideal. Si tenés calzado cerrado, cargalo en tu guardarropa y lo voy a preferir.`);
     else if (rain) sentences.push("Como se espera lluvia, prioricé calzado cerrado y telas que no sufren el agua.");
     else if (feels < 14 && intent.warmthShift <= 0) sentences.push(`Con ${t}° convendría un abrigo, pero todavía no cargaste ninguno en tu guardarropa.`);
     else if (feels >= 25 && intent.warmthShift <= 0) sentences.push(`Con ${t}° prioricé prendas livianas y pocas capas.`);

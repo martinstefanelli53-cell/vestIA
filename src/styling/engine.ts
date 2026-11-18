@@ -90,6 +90,7 @@ interface Ctx {
   input: EngineInput;
   temp: number; // sensación térmica efectiva (incluye "más abrigado / más liviano")
   rain: boolean;
+  night: boolean;
   formality: number | null;
   occasionStyles: readonly string[];
   affinity: Map<string, number>;
@@ -131,6 +132,7 @@ function buildContext(input: EngineInput): Ctx {
     input,
     temp: effectiveTemp(baseTemp, intent.warmthShift),
     rain: intent.rain ?? weather?.rain ?? false,
+    night: weather?.isDay === false,
     formality,
     occasionStyles: [...(occasion?.styles ?? []), ...intent.styles],
     affinity,
@@ -199,6 +201,8 @@ function scoreOutfit(ctx: Ctx, items: Garment[]): OutfitCandidate {
     if (!outer && ctx.temp < 24) clima -= 0.1;
   }
   if (!shoes) clima *= 0.85;
+  // Con lluvia, calzado abierto: fuerte descuento (se elige solo si no hay alternativa).
+  if (ctx.rain && shoes && OPEN_SHOES.includes(shoes.type)) clima *= 0.5;
   // Con frío, nada de calzado abierto ni prendas mínimas (musculosa, short).
   if (ctx.temp < 16 && base.some((g) => g.warmth === 1 || (g.category === "shoes" && OPEN_SHOES.includes(g.type) && g.type !== "taco"))) clima *= 0.4;
   clima = clamp(clima, 0, 1);
@@ -288,6 +292,7 @@ function pickAccessory(ctx: Ctx, items: Garment[], pool: Garment[]): Garment | n
     if (Math.abs(acc.formality - level) <= 1.5) s += 0.1; else s -= 0.3;
     if (["bufanda", "gorro"].includes(acc.type)) s += ctx.temp < 12 ? 0.25 : -0.5;
     if (["gorra", "anteojos"].includes(acc.type) && ctx.temp < 16) s -= 0.2;
+    if (acc.type === "anteojos") s -= ctx.night ? 1 : ctx.rain ? 0.4 : 0; // de noche o con lluvia no suman
     if (acc.is_favorite) s += 0.05;
     s += ctx.rng() * 0.08;
     if (s > bestScore) { best = acc; bestScore = s; }

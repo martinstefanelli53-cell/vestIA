@@ -185,4 +185,33 @@ describe("intérprete de pedidos", () => {
     const avg = (items: Garment[]) => items.reduce((s, g) => s + g.formality, 0) / items.length;
     expect(avg(next.items)).toBeGreaterThan(avg(current));
   });
+
+  it("con lluvia no elige calzado abierto si hay uno cerrado", () => {
+    for (let seed = 1; seed <= 15; seed++) {
+      let r = seed * 7919;
+      const rng = () => ((r = (r * 1664525 + 1013904223) % 4294967296) / 4294967296);
+      const [best] = generateOutfits(input({ weather: weather(20, true), rng }), 3);
+      const shoes = best.items.find((g) => g.category === "shoes");
+      expect(["sandalia", "taco"]).not.toContain(shoes?.type);
+    }
+  });
+
+  it("si el único calzado es abierto y llueve, la explicación no dice que es cerrado", () => {
+    const only = wardrobe.filter((g) => g.category !== "shoes" || g.type === "sandalia");
+    const [best] = generateOutfits(input({ garments: only, weather: weather(20, true) }), 1);
+    const text = explainOutfit(best, weather(20, true), EMPTY_INTENT);
+    expect(text).not.toMatch(/prioricé calzado cerrado/);
+    expect(text).toMatch(/abierto/);
+  });
+
+  it("de noche no suma anteojos", () => {
+    const glasses = garment({ category: "accessory", type: "anteojos", primary_color: "marrón", formality: 2 });
+    const night: StylingWeather = { ...weather(22), isDay: false };
+    for (let seed = 1; seed <= 15; seed++) {
+      let r = seed * 104729;
+      const rng = () => ((r = (r * 1664525 + 1013904223) % 4294967296) / 4294967296);
+      const [best] = generateOutfits(input({ garments: [...wardrobe, glasses], weather: night, rng }), 3);
+      expect(types(best.items)).not.toContain("anteojos");
+    }
+  });
 });

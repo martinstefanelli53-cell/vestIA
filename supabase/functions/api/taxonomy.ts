@@ -143,6 +143,8 @@ export interface StylingWeather {
   rain: boolean;
   condition: string;
   simulated: boolean;
+  /** Falso de noche: no corresponde sugerir anteojos de sol. Si falta, se asume de día. */
+  isDay?: boolean;
 }
 
 export interface StylistRequest {

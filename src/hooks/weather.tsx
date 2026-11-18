@@ -39,6 +39,7 @@ export function toStylingWeather(snapshot: WeatherSnapshot, mode: RainMode): Sty
     rain: mode === "real" ? isRaining(snapshot) : mode === "rain",
     condition: snapshot.current.condition,
     simulated: mode !== "real",
+    isDay: snapshot.current.isDay,
   };
 }
 
