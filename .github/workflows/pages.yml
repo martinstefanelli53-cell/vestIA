@@ -1,8 +1,11 @@
 name: Publicar frontend
 
+# Publica dos versiones en el mismo sitio de GitHub Pages:
+#   /vestIA/        → rama main (versión estable)
+#   /vestIA/beta/   → rama ia-gratuita (IA gratuita en el navegador)
 on:
   push:
-    branches: [main]
+    branches: [main, ia-gratuita]
   workflow_dispatch:
 
 permissions:
@@ -17,22 +20,47 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SITE: /${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v4
+        id: beta
+        continue-on-error: true
+        with:
+          ref: ia-gratuita
+          path: beta
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-        env:
-          VITE_BASE: /${{ github.event.repository.name }}/
-      # GitHub Pages no reescribe rutas: 404.html hace que recargar /outfit funcione.
-      - run: cp dist/index.html dist/404.html
+
+      - name: Versión estable (main)
+        working-directory: main
+        run: |
+          npm ci
+          npm test
+          VITE_BASE="$SITE" npm run build
+          # GitHub Pages no reescribe rutas: 404.html permite recargar /outfit.
+          cp dist/index.html dist/404.html
+          # Rutas profundas de /beta/ que caen en el 404 se reenvían a la beta.
+          sed -i "s#<head>#<head><script>if(location.pathname.indexOf('${SITE}beta/')===0)location.replace('${SITE}beta/?__p='+encodeURIComponent(location.pathname+location.search+location.hash))</script>#" dist/404.html
+
+      - name: Versión beta (ia-gratuita)
+        if: steps.beta.outcome == 'success'
+        continue-on-error: true
+        working-directory: beta
+        run: |
+          npm ci
+          VITE_BASE="${SITE}beta/" npm run build
+          mkdir -p ../main/dist/beta
+          cp -r dist/. ../main/dist/beta/
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: main/dist
 
   deploy:
     needs: build
