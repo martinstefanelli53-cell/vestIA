@@ -12,13 +12,14 @@ import { defaultAttributes, FORMALITY_LABELS, levelsFor, WARMTH_LABELS } from "@
 import { ACCEPTED_IMAGE_TYPES, prepareImage, validateImage } from "@/lib/image";
 import type { Garment, GarmentImage } from "@/lib/types";
 import { friendlyError, isLimitError, signedImageUrl, useBackendStatus, useSaveGarment, type NewImage } from "@/hooks/data";
+import { analyzeGarmentLocally } from "@/lib/localVision";
 import { LimitSheet } from "./Plan";
 import { useToast } from "./Toast";
 import { Button, Chip, ChipGroup, ColorPicker, cx, Field, Segmented, Sheet, Spinner } from "./ui";
 
 type Attributes = GarmentAttributes & { notes: string | null };
 interface Draft extends NewImage { preview: string }
-type Analysis = { state: "idle" } | { state: "running" } | { state: "ai" } | { state: "colors" } | { state: "not-garment" };
+type Analysis = { state: "idle" } | { state: "running"; progress?: number } | { state: "ai" } | { state: "local" } | { state: "colors" } | { state: "not-garment" };
 
 const MAX_PHOTOS = 5;
 
@@ -113,6 +114,22 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
       } catch (error) {
         if (!(error instanceof ApiError)) console.error(error);
       }
+    }
+    // Sin IA en el servidor: modelo gratuito que corre en el navegador.
+    try {
+      const local = await analyzeGarmentLocally(draft.thumb, (progress) => setAnalysis({ state: "running", progress }));
+      if (!local.isGarment) {
+        setAttrs((a) => ({ ...a, primary_color: draft.colors.primary, secondary_colors: draft.colors.secondary }));
+        setAnalysis({ state: "not-garment" });
+        return;
+      }
+      setAttrs((a) => ({ ...a, ...local.fields, primary_color: draft.colors.primary, secondary_colors: draft.colors.secondary }));
+      setAiClassified(true);
+      setLevelsTouched(true);
+      setAnalysis({ state: "local" });
+      return;
+    } catch (error) {
+      console.error("Reconocimiento local no disponible", error);
     }
     setAttrs((a) => ({ ...a, primary_color: draft.colors.primary, secondary_colors: draft.colors.secondary }));
     setAnalysis({ state: "colors" });
@@ -221,10 +238,13 @@ export function GarmentEditor({ open, garment, onClose }: Props) {
           </section>
 
           {analysis.state !== "idle" && (
-            <div role="status" className={cx("flex items-start gap-3 rounded-xl px-4 py-3 text-[13px] leading-relaxed", analysis.state === "ai" ? "bg-ink text-white" : "bg-mist")}>
-              {analyzing ? <Spinner className="mt-0.5 h-4 w-4 shrink-0" /> : <Sparkles className={cx("mt-0.5 h-4 w-4 shrink-0", analysis.state === "ai" ? "text-white" : "text-crimson")} />}
+            <div role="status" className={cx("flex items-start gap-3 rounded-xl px-4 py-3 text-[13px] leading-relaxed", analysis.state === "ai" || analysis.state === "local" ? "bg-ink text-white" : "bg-mist")}>
+              {analyzing ? <Spinner className="mt-0.5 h-4 w-4 shrink-0" /> : <Sparkles className={cx("mt-0.5 h-4 w-4 shrink-0", analysis.state === "ai" || analysis.state === "local" ? "text-white" : "text-crimson")} />}
               <span>
-                {analysis.state === "running" && "Analizando la foto…"}
+                {analysis.state === "running" && (analysis.progress !== undefined && analysis.progress < 100
+                  ? `Preparando el reconocimiento de prendas (${analysis.progress} %). Solo la primera vez.`
+                  : "Analizando la foto…")}
+                {analysis.state === "local" && "Reconocimos la prenda en tu dispositivo y completamos la ficha. Es una sugerencia: revisala y corregí lo que haga falta."}
                 {analysis.state === "ai" && "Reconocimos la prenda con IA y completamos su ficha. Revisala y corregí lo que haga falta."}
                 {analysis.state === "colors" && "Detectamos los colores de la foto. Completá el tipo de prenda y el resto de la ficha."}
                 {analysis.state === "not-garment" && "No pudimos reconocer una prenda en la foto. Completá la ficha a mano o probá con otra imagen."}
