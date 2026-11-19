@@ -127,3 +127,18 @@ function emptyFields(): LocalAnalysis["fields"] {
     fit: "regular", warmth: 2, formality: 2, waterproof: false,
   };
 }
+
+/** Entre un grupo acotado de tipos (p. ej. solo calzado), cuál describe mejor la imagen. */
+export async function classifyTypeAmong(image: Blob, types: readonly string[], onProgress?: VisionProgress): Promise<{ type: string; score: number }> {
+  const classify = await loadVisionModel(onProgress);
+  if (types.length === 1) return { type: types[0], score: 1 };
+  const prompts = Object.fromEntries(types.filter((t) => TYPE_PROMPTS[t]).map((t) => [t, TYPE_PROMPTS[t]]));
+  const ranked = await rank(classify, image, prompts);
+  return { type: ranked[0].key, score: ranked[0].score };
+}
+
+export async function classifyPattern(image: Blob, onProgress?: VisionProgress): Promise<string> {
+  const classify = await loadVisionModel(onProgress);
+  const ranked = await rank(classify, image, PATTERN_PROMPTS);
+  return ranked[0].score >= 0.5 ? ranked[0].key : "liso";
+}

@@ -1,15 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, BarChart3, Check, Compass, Crown, Flame, History, Plus, Sparkles, Target } from "lucide-react";
 import { OCCASIONS } from "@shared/taxonomy.ts";
 import { GarmentThumb } from "@/components/Garment";
-import { LookCard, LookSheet } from "@/components/Look";
 import { OutfitStrip } from "@/components/OutfitGrid";
 import { Button, cx, ProgressBar, SectionTitle, Skeleton } from "@/components/ui";
 import { RainSelector, WeatherCard } from "@/components/Weather";
-import { useEntitlements, useGarments, useLooks, useOutfits, useProfile, useToggleLookSave } from "@/hooks/data";
+import { useEntitlements, useGarments, useInspirations, useOutfits, useProfile } from "@/hooks/data";
 import { useWeather } from "@/hooks/weather";
-import { rankLooks } from "@/lib/feed";
 import { capitalize, currentSeason, dayKey, greeting, longDate, lowerFirst } from "@/lib/format";
 import { computeStreak, wardrobeStats, weeklyChallenge } from "@/lib/gamification";
 import { EMPTY_INTENT, generateOutfits, missingForOutfit } from "@/styling/engine";
@@ -29,11 +27,9 @@ export function HomePage() {
   const { data: profile } = useProfile();
   const { data: garments, isLoading } = useGarments();
   const { data: outfits } = useOutfits();
-  const { data: looksData } = useLooks();
+  const { data: inspirations = [] } = useInspirations();
   const { data: entitlements } = useEntitlements();
   const { styling } = useWeather();
-  const toggleSave = useToggleLookSave();
-  const [openLook, setOpenLook] = useState<string | null>(null);
 
   const list = garments ?? [];
   const history = outfits ?? [];
@@ -42,9 +38,6 @@ export function HomePage() {
   const stats = useMemo(() => wardrobeStats(list, history), [list, history]);
   const streak = useMemo(() => computeStreak(list, history), [list, history]);
   const challenge = useMemo(() => weeklyChallenge(list, history), [list, history]);
-  const looks = useMemo(() => rankLooks(looksData?.looks ?? [], profile, season), [looksData, profile, season]);
-  const savedLooks = new Set(looksData?.savedIds ?? []);
-  const look = looks.find((l) => l.id === openLook) ?? null;
 
   // Idea del día: la mejor combinación que el motor encuentra para el clima de hoy.
   const idea = useMemo(() => {
@@ -63,7 +56,7 @@ export function HomePage() {
   const firstSteps = [
     { done: list.length >= 5, label: `Cargá 5 prendas (${Math.min(list.length, 5)} de 5)`, to: "/guardarropa?nueva=1" },
     { done: history.length > 0, label: "Generá tu primer outfit", to: "/outfit" },
-    { done: savedLooks.size > 0, label: "Guardá un look de inspiración", to: "/inspiracion" },
+    { done: inspirations.length > 0, label: "Sumá una referencia de inspiración", to: "/inspiracion" },
   ];
   const onboardingDone = firstSteps.every((s) => s.done);
 
@@ -231,19 +224,26 @@ export function HomePage() {
         </section>
       )}
 
-      {/* Feed de inspiración */}
-      {looks.length > 0 && (
-        <section>
-          <SectionTitle title="Inspiración para vos" action={<MoreLink to="/inspiracion">Ver todo</MoreLink>} />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3">
-            {looks.slice(0, 3).map((l, i) => (
-              <div key={l.id} className={cx(i === 2 && "hidden sm:block")}>
-                <LookCard look={l} saved={savedLooks.has(l.id)} onOpen={() => setOpenLook(l.id)} onToggleSave={() => toggleSave.mutate({ lookId: l.id, saved: savedLooks.has(l.id) })} />
-              </div>
+      {/* Mi inspiración */}
+      <section>
+        <SectionTitle title="Mi inspiración" action={<MoreLink to="/inspiracion">{inspirations.length ? "Ver todo" : "Probar"}</MoreLink>} />
+        {inspirations.length > 0 ? (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {inspirations.slice(0, 4).map((item, i) => (
+              <Link key={item.id} to="/inspiracion" className={cx("group block", i === 3 && "hidden sm:block")}>
+                <div className="aspect-[4/5] overflow-hidden rounded-card bg-mist transition-shadow group-hover:shadow-md">
+                  {item.imageUrl && <img src={item.imageUrl} alt={item.title || "Referencia de inspiración"} className="h-full w-full object-cover" loading="lazy" />}
+                </div>
+              </Link>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <Link to="/inspiracion" className="flex items-center gap-4 rounded-card border border-black/[0.07] p-4 transition-all hover:border-ink">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-mist"><Compass className="h-5 w-5" /></span>
+            <p className="text-sm leading-relaxed">Subí una foto de un look que te guste y armamos una versión parecida con tu ropa.</p>
+          </Link>
+        )}
+      </section>
 
       {entitlements?.plan.id === "free" && (
         <Link to="/premium" className="flex items-center gap-4 rounded-card bg-mist p-5 transition-colors hover:bg-black/[0.08]">
@@ -256,8 +256,6 @@ export function HomePage() {
         </Link>
       )}
 
-      <LookSheet look={look} all={looks} saved={look ? savedLooks.has(look.id) : false} onClose={() => setOpenLook(null)}
-        onToggleSave={() => look && toggleSave.mutate({ lookId: look.id, saved: savedLooks.has(look.id) })} onOpenLook={(l) => setOpenLook(l.id)} />
     </div>
   );
 }

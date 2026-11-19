@@ -149,7 +149,7 @@ export function achievements(garments: Garment[], outfits: Outfit[], savedLooks:
     ["racha-3", "En ritmo", "Usá VESTIA 3 días seguidos.", streak, 3],
     ["racha-7", "Semana perfecta", "Usá VESTIA 7 días seguidos.", streak, 7],
     ["reuso-50", "Placard activo", "Usá la mitad de tus prendas en 30 días (mínimo 10 prendas).", reuse, 50],
-    ["inspiracion-3", "Radar de tendencias", "Guardá 3 looks de inspiración.", savedLooks, 3],
+    ["inspiracion-3", "Radar de tendencias", "Sumá 3 referencias a Mi inspiración.", savedLooks, 3],
   ];
   return list.map(([id, title, description, value, goal]) => ({
     id, title, description, goal, progress: Math.min(value, goal), unlocked: value >= goal,

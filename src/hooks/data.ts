@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GarmentAttributes, StylingWeather } from "@shared/taxonomy.ts";
 import { api, UserError } from "@/lib/api";
 import { GARMENT_BUCKET, supabase } from "@/lib/supabase";
-import type { Entitlements, Garment, Look, Outfit, Plan, Profile, RainMode } from "@/lib/types";
+import type { InspirationPiece } from "@/lib/inspirationVision";
+import type { Entitlements, Garment, Outfit, Plan, Profile, RainMode } from "@/lib/types";
 import { useUserId } from "./auth";
 
 /** Traduce errores técnicos a mensajes claros para la persona. */
@@ -256,41 +257,84 @@ export function usePlans() {
   });
 }
 
-export function useLooks() {
+// ───────────────────────── Mi inspiración ─────────────────────────
+export interface Inspiration {
+  id: string;
+  title: string;
+  image_path: string;
+  thumb_path: string | null;
+  pieces: InspirationPiece[];
+  created_at: string;
+  imageUrl: string | null;
+}
+
+export function useInspirations() {
   const uid = useUserId();
   return useQuery({
-    queryKey: ["looks", uid],
-    staleTime: 10 * 60_000,
-    queryFn: async () => {
-      const [looks, saves] = await Promise.all([
-        supabase.from("inspiration_looks").select("*").order("sort_order"),
-        supabase.from("inspiration_saves").select("look_id"),
-      ]);
-      return {
-        looks: unwrap(looks) as Look[],
-        savedIds: (unwrap(saves) as { look_id: string }[]).map((s) => s.look_id),
-      };
+    queryKey: ["inspirations", uid],
+    staleTime: 20 * 60_000, // las URLs firmadas duran 1 h
+    queryFn: async (): Promise<Inspiration[]> => {
+      const rows = unwrap(await supabase.from("user_inspirations").select("*").order("created_at", { ascending: false })) as Omit<Inspiration, "imageUrl">[];
+      const paths = rows.map((r) => r.thumb_path ?? r.image_path);
+      const urls = new Map<string, string>();
+      if (paths.length) {
+        const { data } = await supabase.storage.from(GARMENT_BUCKET).createSignedUrls(paths, 3600);
+        data?.forEach((u) => u.path && u.signedUrl && urls.set(u.path, u.signedUrl));
+      }
+      return rows.map((r, i) => ({ ...r, imageUrl: urls.get(paths[i]) ?? null }));
     },
   });
 }
 
-export function useToggleLookSave() {
+export function useSaveInspiration() {
   const uid = useUserId();
   const qc = useQueryClient();
-  type Cache = { looks: Look[]; savedIds: string[] };
   return useMutation({
-    mutationFn: async ({ lookId, saved }: { lookId: string; saved: boolean }) => {
-      const query = saved
-        ? supabase.from("inspiration_saves").delete().match({ user_id: uid, look_id: lookId })
-        : supabase.from("inspiration_saves").upsert({ user_id: uid, look_id: lookId });
-      const { error } = await query;
-      if (error) throw new Error(error.message);
+    mutationFn: async (input: { file: File; thumb: Blob; title: string; pieces: InspirationPiece[] }) => {
+      const key = crypto.randomUUID();
+      const ext = input.file.type === "image/png" ? "png" : input.file.type === "image/webp" ? "webp" : "jpg";
+      const imagePath = `${uid}/inspiration/${key}.${ext}`;
+      const thumbPath = `${uid}/inspiration/${key}_thumb.jpg`;
+      const up = await supabase.storage.from(GARMENT_BUCKET).upload(imagePath, input.file, { contentType: input.file.type });
+      if (up.error) throw new UserError("No se pudo subir la foto. Intentá de nuevo.");
+      await supabase.storage.from(GARMENT_BUCKET).upload(thumbPath, input.thumb, { contentType: "image/jpeg" });
+      return unwrap(
+        await supabase.from("user_inspirations").insert({ user_id: uid, title: input.title, image_path: imagePath, thumb_path: thumbPath, pieces: input.pieces }).select("id").single(),
+      ) as { id: string };
     },
-    onMutate: ({ lookId, saved }) => {
-      qc.setQueryData<Cache>(["looks", uid], (cache) =>
-        cache && { ...cache, savedIds: saved ? cache.savedIds.filter((id) => id !== lookId) : [...cache.savedIds, lookId] });
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inspirations", uid] }),
+  });
+}
+
+export function useUpdateInspiration() {
+  const uid = useUserId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: { id: string; title?: string; pieces?: InspirationPiece[] }) => {
+      unwrap(await supabase.from("user_inspirations").update(patch).eq("id", id).select("id").single());
     },
-    onError: () => qc.invalidateQueries({ queryKey: ["looks", uid] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inspirations", uid] }),
+  });
+}
+
+/** Borra del storage todas las referencias de la persona (se usa antes de dar de baja la cuenta). */
+export async function purgeInspirationFiles(uid: string): Promise<void> {
+  const folder = `${uid}/inspiration`;
+  const { data } = await supabase.storage.from(GARMENT_BUCKET).list(folder, { limit: 1000 });
+  const paths = (data ?? []).filter((f) => f.id).map((f) => `${folder}/${f.name}`);
+  if (paths.length) await supabase.storage.from(GARMENT_BUCKET).remove(paths);
+}
+
+export function useDeleteInspiration() {
+  const uid = useUserId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (item: Inspiration) => {
+      const paths = [item.image_path, item.thumb_path].filter((p): p is string => Boolean(p));
+      await supabase.storage.from(GARMENT_BUCKET).remove(paths);
+      unwrap(await supabase.from("user_inspirations").delete().eq("id", item.id).select("id"));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["inspirations", uid] }),
   });
 }
 

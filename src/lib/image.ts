@@ -80,11 +80,46 @@ function distance(a: RGB, b: RGB): number {
   return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
 }
 
+function rgbToLab([r, g, b]: RGB): [number, number, number] {
+  const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const [lr, lg, lb] = [lin(r), lin(g), lin(b)];
+  const x = (0.4124 * lr + 0.3576 * lg + 0.1805 * lb) / 0.95047;
+  const y = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+  const z = (0.0193 * lr + 0.1192 * lg + 0.9505 * lb) / 1.08883;
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+const PALETTE_LAB = PALETTE.map((p) => ({ name: p.name, lab: rgbToLab(p.rgb) }));
+
+function hsl([r, g, b]: RGB): [number, number, number] {
+  const [R, G, B] = [r / 255, g / 255, b / 255];
+  const max = Math.max(R, G, B), min = Math.min(R, G, B), l = (max + min) / 2, d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === R ? ((G - B) / d) % 6 : max === G ? (B - R) / d + 2 : (R - G) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+
+/**
+ * Nombre de color de la paleta de VESTIA. Los neutros (negro, gris, blanco) se deciden
+ * por luminosidad, porque con poca saturación el tono de la luz engaña (un negro con
+ * sombra azulada no es "azul marino"); el resto, por distancia en espacio Lab.
+ */
 export function nearestColorName(rgb: RGB): string {
-  let best = PALETTE[0];
+  const [h, s, l] = hsl(rgb);
+  if (l < 0.1) return "negro";
+  if (s < 0.14 || l > 0.95) {
+    if (l < 0.24) return "negro";
+    if (l > 0.88) return "blanco";
+    return "gris";
+  }
+  if (l < 0.17 && s < 0.5) return "negro";
+  if (l > 0.82 && s < 0.5 && h >= 20 && h <= 65) return "crema";
+  const lab = rgbToLab(rgb);
+  let best = PALETTE_LAB[0];
   let bestD = Infinity;
-  for (const entry of PALETTE) {
-    const d = distance(rgb, entry.rgb);
+  for (const entry of PALETTE_LAB) {
+    const d = (lab[0] - entry.lab[0]) ** 2 + (lab[1] - entry.lab[1]) ** 2 + (lab[2] - entry.lab[2]) ** 2;
     if (d < bestD) { best = entry; bestD = d; }
   }
   return best.name;

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Award, Check, Crown, Flame, Lock, Target } from "lucide-react";
 import { GarmentThumb } from "@/components/Garment";
 import { cx, EmptyState, PageHeader, ProgressBar, SectionTitle, Skeleton, Button } from "@/components/ui";
-import { useEntitlements, useGarments, useLooks, useOutfits } from "@/hooks/data";
+import { useEntitlements, useGarments, useInspirations, useOutfits } from "@/hooks/data";
 import { achievements, computeStreak, wardrobeStats, weeklyChallenge } from "@/lib/gamification";
 import type { Garment } from "@/lib/types";
 
@@ -29,7 +29,7 @@ function GarmentRow({ title, empty, items, caption }: { title: string; empty: st
 export function ProgressPage() {
   const { data: garments, isLoading } = useGarments();
   const { data: outfits } = useOutfits();
-  const { data: looks } = useLooks();
+  const { data: inspirations } = useInspirations();
   const { data: entitlements } = useEntitlements();
 
   const list = garments ?? [];
@@ -37,7 +37,7 @@ export function ProgressPage() {
   const stats = useMemo(() => wardrobeStats(list, history), [list, history]);
   const streak = useMemo(() => computeStreak(list, history), [list, history]);
   const challenge = useMemo(() => weeklyChallenge(list, history), [list, history]);
-  const badges = useMemo(() => achievements(list, history, looks?.savedIds.length ?? 0), [list, history, looks]);
+  const badges = useMemo(() => achievements(list, history, inspirations?.length ?? 0), [list, history, inspirations]);
   const advanced = entitlements?.plan.features.advanced_stats ?? false;
   const unlocked = badges.filter((b) => b.unlocked).length;
   const maxCategory = Math.max(1, ...stats.byCategory.map((c) => c.count));

@@ -7,7 +7,7 @@ import { useToast } from "@/components/Toast";
 import { Button, ChipGroup, ColorPicker, ConfirmDialog, Field, PageHeader, Segmented, Skeleton } from "@/components/ui";
 import { LocationSheet } from "@/components/Weather";
 import { useAuth } from "@/hooks/auth";
-import { friendlyError, useEntitlements, useProfile, useUpdateProfile } from "@/hooks/data";
+import { friendlyError, purgeInspirationFiles, useEntitlements, useProfile, useUpdateProfile } from "@/hooks/data";
 import { useWeather } from "@/hooks/weather";
 import { api } from "@/lib/api";
 import { capitalize } from "@/lib/format";
@@ -78,6 +78,8 @@ export function ProfilePage() {
   const deleteAccount = async () => {
     setDeleting(true);
     try {
+      // Las fotos de "Mi inspiración" se borran primero: el servidor solo conoce las de prendas.
+      await purgeInspirationFiles(profile.id).catch(() => undefined);
       await api("/account", { method: "DELETE" });
       queryClient.clear();
       await signOut();

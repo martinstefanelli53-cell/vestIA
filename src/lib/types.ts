@@ -63,28 +63,6 @@ export interface Outfit {
 
 export type RainMode = "real" | "rain" | "dry";
 
-export interface LookPiece {
-  category: Category;
-  type: string;
-  color: string;
-}
-
-export interface Look {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  kind: "look" | "combinacion" | "tendencia";
-  style: string;
-  occasion: string | null;
-  season: string | null;
-  palette: string[];
-  pieces: LookPiece[];
-  tags: string[];
-  image_path: string | null;
-  sort_order: number;
-}
-
 export interface Plan {
   id: "free" | "premium";
   name: string;
