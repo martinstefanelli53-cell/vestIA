@@ -79,7 +79,7 @@ const CHALLENGES: { id: string; title: string; description: string; goal: number
   { id: "usar-3", title: "Tres looks, tres días", description: "Registrá 3 outfits usados esta semana.", goal: 3, progress: (w) => w.wornOutfits },
   { id: "variedad-8", title: "Semana sin repetir", description: "Usá 8 prendas distintas de tu guardarropa.", goal: 8, progress: (w) => w.distinctGarmentsWorn },
   { id: "estrenos-2", title: "Rescate del fondo del placard", description: "Dale uso a 2 prendas que nunca registraste.", goal: 2, progress: (w) => w.debuts },
-  { id: "guardar-3", title: "Tu propia curaduría", description: "Guardá 3 outfits nuevos en favoritos.", goal: 3, progress: (w) => w.savedThisWeek },
+  { id: "guardar-3", title: "Tus favoritos de la semana", description: "Guardá 3 outfits nuevos en favoritos.", goal: 3, progress: (w) => w.savedThisWeek },
 ];
 
 export function weeklyChallenge(garments: Garment[], outfits: Outfit[], now = new Date()): Challenge {
@@ -143,7 +143,7 @@ export function achievements(garments: Garment[], outfits: Outfit[], savedLooks:
     ["placard-25", "Placard completo", "Digitalizá 25 prendas.", stats.total, 25],
     ["primer-outfit", "Primer look", "Generá tu primer outfit.", stats.outfitsCreated, 1],
     ["outfits-15", "Ojo entrenado", "Generá 15 outfits.", stats.outfitsCreated, 15],
-    ["guardados-5", "Curadora", "Guardá 5 outfits en favoritos.", saved, 5],
+    ["guardados-5", "Coleccionista de looks", "Guardá 5 outfits en favoritos.", saved, 5],
     ["valoraciones-5", "Con criterio propio", "Valorá 5 recomendaciones.", rated, 5],
     ["usos-10", "Del dicho al hecho", "Registrá 10 outfits usados.", stats.outfitsWorn, 10],
     ["racha-3", "En ritmo", "Usá VESTIA 3 días seguidos.", streak, 3],
