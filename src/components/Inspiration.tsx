@@ -1,6 +1,6 @@
 // Ficha de una referencia de inspiración: foto, prendas detectadas (editables) y
 // versiones armadas con el guardarropa de la persona.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bookmark, Check, Gift, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { CATEGORIES, CATEGORY_LABELS, COLOR_NAMES, PATTERNS, TYPES_BY_CATEGORY, type Category } from "@shared/taxonomy.ts";
 import { capitalize } from "@/lib/format";
@@ -75,6 +75,12 @@ export function InspirationSheet({ draft, status, garments, saving, dirty, onCha
   const [savedOutfit, setSavedOutfit] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [addingWish, setAddingWish] = useState(false);
+  const resultRef = useRef<HTMLElement>(null);
+  const hasVersion = versionIndex !== null;
+  // Al armar la versión, llevar la vista hasta el resultado: queda debajo de la lista de prendas.
+  useEffect(() => {
+    if (hasVersion) requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [hasVersion]);
 
   const pieces = draft?.pieces ?? [];
   const versions = useMemo(() => (versionIndex === null ? [] : buildVersions(pieces, garments, scoreItems)), [versionIndex === null, pieces, garments, scoreItems]);
@@ -208,7 +214,7 @@ export function InspirationSheet({ draft, status, garments, saving, dirty, onCha
         </div>
 
         {version && (
-          <section className="mt-8 border-t border-black/[0.08] pt-6 animate-fade-up" aria-live="polite">
+          <section ref={resultRef} className="mt-8 scroll-mt-4 border-t border-black/[0.08] pt-6 animate-fade-up" aria-live="polite">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="eyebrow">Tu versión</p>
