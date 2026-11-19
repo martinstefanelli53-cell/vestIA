@@ -1,10 +1,11 @@
 // Ficha de una referencia de inspiración: foto, prendas detectadas (editables) y
 // versiones armadas con el guardarropa de la persona.
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bookmark, Check, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
-import { CATEGORIES, CATEGORY_LABELS, COLOR_NAMES, TYPES_BY_CATEGORY, type Category } from "@shared/taxonomy.ts";
+import { AlertTriangle, Bookmark, Check, Gift, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { CATEGORIES, CATEGORY_LABELS, COLOR_NAMES, PATTERNS, TYPES_BY_CATEGORY, type Category } from "@shared/taxonomy.ts";
 import { capitalize } from "@/lib/format";
 import type { InspirationPiece } from "@/lib/inspirationVision";
+import type { WishlistItem } from "@/hooks/data";
 import type { Garment } from "@/lib/types";
 import { buildVersions, MATCH_THRESHOLD, pieceLabel } from "@/styling/inspiration";
 import { OutfitGrid } from "./OutfitGrid";
@@ -36,6 +37,8 @@ interface Props {
   onSaveOutfit: (items: Garment[], explanation: string) => Promise<void>;
   limitOpen: boolean;
   onLimitClose: () => void;
+  wishlist: WishlistItem[];
+  onAddToWishlist: (pieces: InspirationPiece[]) => Promise<void>;
 }
 
 const selectClass = "h-9 min-w-0 rounded-lg border border-black/12 bg-paper px-2 !text-[13px] focus:border-ink focus:outline-none";
@@ -53,6 +56,9 @@ function PieceRow({ piece, onChange, onRemove }: { piece: InspirationPiece; onCh
           <select aria-label="Color" className={selectClass} value={piece.color} onChange={(e) => onChange({ ...piece, color: e.target.value })}>
             {COLOR_NAMES.map((c) => <option key={c} value={c}>{capitalize(c)}</option>)}
           </select>
+          <select aria-label="Estampado" className={selectClass} value={piece.pattern} onChange={(e) => onChange({ ...piece, pattern: e.target.value })}>
+            {PATTERNS.map((p) => <option key={p} value={p}>{p === "liso" ? "Liso (sin estampado)" : capitalize(p)}</option>)}
+          </select>
         </div>
       </div>
       <button type="button" aria-label={`Quitar ${pieceLabel(piece)}`} onClick={onRemove} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-graphite transition-colors hover:bg-mist hover:text-ink">
@@ -62,12 +68,13 @@ function PieceRow({ piece, onChange, onRemove }: { piece: InspirationPiece; onCh
   );
 }
 
-export function InspirationSheet({ draft, status, garments, saving, dirty, onChange, onSave, onDelete, onClose, scoreItems, onSaveOutfit, limitOpen, onLimitClose }: Props) {
+export function InspirationSheet({ draft, status, garments, saving, dirty, onChange, onSave, onDelete, onClose, scoreItems, onSaveOutfit, limitOpen, onLimitClose, wishlist, onAddToWishlist }: Props) {
   const toast = useToast();
   const [versionIndex, setVersionIndex] = useState<number | null>(null);
   const [savingOutfit, setSavingOutfit] = useState(false);
   const [savedOutfit, setSavedOutfit] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [addingWish, setAddingWish] = useState(false);
 
   const pieces = draft?.pieces ?? [];
   const versions = useMemo(() => (versionIndex === null ? [] : buildVersions(pieces, garments, scoreItems)), [versionIndex === null, pieces, garments, scoreItems]);
@@ -106,6 +113,23 @@ export function InspirationSheet({ draft, status, garments, saving, dirty, onCha
 
   const pct = (n: number) => `${Math.round(n * 100)} %`;
 
+  // Lo que falta (o solo se cubre de forma aproximada) puede ir a la lista de deseos.
+  const wishKey = (p: Pick<InspirationPiece, "category" | "type" | "color" | "pattern">) => `${p.category}|${p.type}|${p.color}|${p.pattern}`;
+  const inList = new Set(wishlist.filter((w) => w.inspiration_id === draft.id && draft.id).map(wishKey));
+  const lacking = version ? version.matches.filter((m) => !m.garment || m.approx).map((m) => m.piece) : [];
+  const toAdd = lacking.filter((p) => !inList.has(wishKey(p)));
+  const addToWishlist = async () => {
+    setAddingWish(true);
+    try {
+      await onAddToWishlist(toAdd);
+      toast(toAdd.length === 1 ? "Agregada a tu lista de deseos" : `${toAdd.length} prendas agregadas a tu lista de deseos`);
+    } catch {
+      /* el error lo muestra el padre */
+    } finally {
+      setAddingWish(false);
+    }
+  };
+
   return (
     <>
       <Sheet
@@ -115,7 +139,7 @@ export function InspirationSheet({ draft, status, garments, saving, dirty, onCha
         title={draft.id ? "Tu referencia" : "Nueva referencia"}
         footer={
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="min-w-0 flex-1" icon={<Sparkles className="h-4 w-4" />} disabled={detecting || pieces.length === 0 || garments.length === 0}
+            <Button className="min-w-0 flex-1 basis-full sm:basis-0" icon={<Sparkles className="h-4 w-4" />} disabled={detecting || pieces.length === 0 || garments.length === 0}
               onClick={() => { setVersionIndex(0); setSavedOutfit(false); }}>
               Armar con mi guardarropa
             </Button>
@@ -216,6 +240,23 @@ export function InspirationSheet({ draft, status, garments, saving, dirty, onCha
                 </li>
               ))}
             </ul>
+
+            {lacking.length > 0 && (
+              <div className="mt-4 rounded-xl border border-black/[0.08] px-4 py-3">
+                <p className="text-sm font-medium">Te falta para este look</p>
+                <ul className="mt-1.5 space-y-1 text-[13px] text-graphite">
+                  {lacking.map((p, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <ColorDot color={p.color} size={12} /> {capitalize(pieceLabel(p))}
+                      {inList.has(wishKey(p)) && <span className="ml-auto flex items-center gap-1 text-xs text-ink"><Check className="h-3.5 w-3.5" /> En tu lista</span>}
+                    </li>
+                  ))}
+                </ul>
+                <Button className="mt-3" size="sm" variant="outline" icon={<Gift className="h-3.5 w-3.5" />} loading={addingWish} disabled={toAdd.length === 0} onClick={addToWishlist}>
+                  {toAdd.length === 0 ? "Ya está en tu lista de deseos" : toAdd.length === 1 ? "Agregar a mi lista de deseos" : "Agregar todo a mi lista de deseos"}
+                </Button>
+              </div>
+            )}
 
             {!version.complete && (
               <p className="mt-3 rounded-xl bg-mist px-4 py-3 text-[13px] leading-relaxed">

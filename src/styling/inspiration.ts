@@ -127,8 +127,10 @@ export function buildVersions(pieces: InspirationPiece[], garments: Garment[], e
   return versions.sort((a, b) => rank(b) - rank(a)).slice(0, MAX_VERSIONS);
 }
 
-export function pieceLabel(piece: Pick<InspirationPiece, "type" | "color">): string {
-  return `${piece.type} ${piece.color}`;
+/** "camisa celeste" o, si es estampada, "camisa celeste · rayado". */
+export function pieceLabel(piece: Pick<InspirationPiece, "type" | "color"> & { pattern?: string }): string {
+  const base = `${piece.type} ${piece.color}`;
+  return piece.pattern && piece.pattern !== "liso" ? `${base} · ${piece.pattern}` : base;
 }
 
 export function categoryOrder(c: Category): number {

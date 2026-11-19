@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GarmentAttributes, StylingWeather } from "@shared/taxonomy.ts";
 import { api, UserError } from "@/lib/api";
 import { GARMENT_BUCKET, supabase } from "@/lib/supabase";
+import type { Category } from "@shared/taxonomy.ts";
 import type { InspirationPiece } from "@/lib/inspirationVision";
 import type { Entitlements, Garment, Outfit, Plan, Profile, RainMode } from "@/lib/types";
 import { useUserId } from "./auth";
@@ -314,6 +315,69 @@ export function useUpdateInspiration() {
       unwrap(await supabase.from("user_inspirations").update(patch).eq("id", id).select("id").single());
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inspirations", uid] }),
+  });
+}
+
+// ───────────────────────── Lista de deseos ─────────────────────────
+export interface WishlistItem {
+  id: string;
+  inspiration_id: string | null;
+  category: Category;
+  type: string;
+  color: string;
+  pattern: string;
+  source_title: string;
+  acquired: boolean;
+  created_at: string;
+}
+
+export function useWishlist() {
+  const uid = useUserId();
+  return useQuery({
+    queryKey: ["wishlist", uid],
+    queryFn: async () => unwrap(await supabase.from("wishlist_items").select("*").order("created_at", { ascending: false })) as WishlistItem[],
+  });
+}
+
+export function useAddToWishlist() {
+  const uid = useUserId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ inspirationId, sourceTitle, pieces }: { inspirationId: string | null; sourceTitle: string; pieces: InspirationPiece[] }) => {
+      const rows = pieces.map((p) => ({
+        user_id: uid, inspiration_id: inspirationId, source_title: sourceTitle, category: p.category, type: p.type, color: p.color, pattern: p.pattern,
+      }));
+      unwrap(await supabase.from("wishlist_items").insert(rows).select("id"));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["wishlist", uid] }),
+  });
+}
+
+export function useUpdateWishlistItem() {
+  const uid = useUserId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, acquired }: { id: string; acquired: boolean }) => {
+      unwrap(await supabase.from("wishlist_items").update({ acquired }).eq("id", id).select("id").single());
+    },
+    onMutate: ({ id, acquired }) => {
+      qc.setQueryData<WishlistItem[]>(["wishlist", uid], (list) => list?.map((i) => (i.id === id ? { ...i, acquired } : i)));
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ["wishlist", uid] }),
+  });
+}
+
+export function useDeleteWishlistItem() {
+  const uid = useUserId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      unwrap(await supabase.from("wishlist_items").delete().eq("id", id).select("id"));
+    },
+    onMutate: (id) => {
+      qc.setQueryData<WishlistItem[]>(["wishlist", uid], (list) => list?.filter((i) => i.id !== id));
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ["wishlist", uid] }),
   });
 }
 
